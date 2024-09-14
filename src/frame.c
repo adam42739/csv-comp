@@ -8,7 +8,11 @@ typedef __int8_t u8;
 struct frame frame_alloc(int num_rows, int num_cols)
 {
     char **headers = mem_alloc(sizeof(char *) * num_cols);
-    void **cols = mem_alloc(sizeof(void *) * num_rows);
+    char ***cols = mem_alloc(sizeof(char **) * num_rows);
+    for (int i = 0; i < num_rows; ++i)
+    {
+        cols[i] = mem_alloc(sizeof(char *) * num_cols);
+    }
     struct frame df = {
         .num_cols = num_cols,
         .num_rows = num_rows,
@@ -20,6 +24,10 @@ struct frame frame_alloc(int num_rows, int num_cols)
 void frame_free(struct frame df)
 {
     free(df.headers);
+    for (int i = 0; df.num_rows; ++i)
+    {
+        free(df.cols[i]);
+    }
     free(df.cols);
 }
 
@@ -176,11 +184,11 @@ static void get_headers_csv(struct frame *df, void *bytes, int *index, int size)
     }
 }
 
-static void get_line_csv(struct frame *df, void *bytes, int *index, int size)
+static void get_row_csv(struct frame *df, void *bytes, int *index, int size, int row)
 {
     for (int i = 0; i < df->num_cols; ++i)
     {
-        get_bytes(bytes, index, size, &df->headers[i], CSV);
+        get_bytes(bytes, index, size, &df->cols[row][i], CSV);
     }
 }
 
@@ -198,7 +206,8 @@ struct frame frame_read_csv(const char *path)
     get_headers_csv(&df, bytes, &index, size);
     for (int i = 0; i < num_cols; ++i)
     {
-        }
+        get_row_csv(&df, bytes, &index, size, i);
+    }
     return df;
 }
 
