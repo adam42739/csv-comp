@@ -201,11 +201,11 @@ struct frame frame_read_csv(const char *path)
     int index = 0;
     int num_rows = 0;
     int num_cols = 0;
-    num_rows = count_bn(bytes, size) - 2;
+    num_rows = count_bn(bytes, size) - 1;
     num_cols = count_comma(bytes, size);
     struct frame df = frame_alloc(num_rows, num_cols);
     get_headers_csv(&df, bytes, &index, size);
-    for (int i = 0; i < num_cols; ++i)
+    for (int i = 0; i < num_rows; ++i)
     {
         get_row_csv(&df, bytes, &index, size, i);
     }
