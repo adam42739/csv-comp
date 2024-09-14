@@ -150,6 +150,7 @@ static int count_comma(void *bytes, int size)
     {
         if (*((char *)bytes + index) == '\n')
         {
+            ++count;
             break;
         }
         else if (*((char *)bytes + index) == ',')
