@@ -9,7 +9,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/debug/out/build/opt_file_comp",
-      "args": [],
+      "args": ["files/aapl=2024-09-03.otpc", "files/aapl=2024-09-03.csv"],
       "stopAtEntry": false,
       "cwd": "${fileDirname}",
       "environment": [],
