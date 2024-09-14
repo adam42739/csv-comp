@@ -5,11 +5,14 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "(lldb) Launch",
+      "name": "Debug",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/debug/out/build/opt_file_comp",
-      "args": ["files/aapl=2024-09-03.otpc", "files/aapl=2024-09-03.csv"],
+      "args": [
+        "/Users/adamlynch/Documents/HobbyWork/opt-file-comp/files/aapl=2024-09-03.otpc",
+        "/Users/adamlynch/Documents/HobbyWork/opt-file-comp/files/aapl=2024-09-03.csv"
+      ],
       "stopAtEntry": false,
       "cwd": "${fileDirname}",
       "environment": [],
