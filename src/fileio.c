@@ -1,6 +1,9 @@
 #include "fileio.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include "misc.h"
 
-void fileio_write(const char *path, void *bytes, int size, const char *mode)
+void fileio_write(char const *path, void *bytes, int size, char const *mode)
 {
     FILE *file = fopen(path, mode);
     if (file)
@@ -9,7 +12,7 @@ void fileio_write(const char *path, void *bytes, int size, const char *mode)
     }
 }
 
-void fileio_read(const char *path, void **bytes, int *size, const char *mode)
+void fileio_read(char const *path, void **bytes, int *size, char const *mode)
 {
     FILE *file = fopen(path, mode);
     if (file)
