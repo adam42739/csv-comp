@@ -1,18 +1,17 @@
-#include "misc.h"
-#include "fileio.h"
+#pragma once
 
 struct frame
 {
     int num_cols;
     int num_rows;
     char **headers;
-    char ***cols;
+    char ***rows;
 };
 
 struct frame frame_alloc(int num_rows, int num_cols);
 
 void frame_free(struct frame df);
 
-struct frame frame_read_csv(const char *path);
+struct frame frame_read_csv(char const *path);
 
-struct frame frame_write_csv(const char *path);
+void frame_write_csv(struct frame df, char const *path);
