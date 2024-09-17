@@ -10,8 +10,8 @@
       "request": "launch",
       "program": "${workspaceFolder}/debug/out/build/opt_file_comp",
       "args": [
-        "/Users/adamlynch/Documents/HobbyWork/opt-file-comp/files/aapl=2024-09-03.csvc",
-        "/Users/adamlynch/Documents/HobbyWork/opt-file-comp/files/aapl=2024-09-03.csv"
+        "/Users/adamlynch/Documents/HobbyWork/csv-comp/files/aapl=2024-09-03.csvc",
+        "/Users/adamlynch/Documents/HobbyWork/csv-comp/files/aapl=2024-09-03.csv"
       ],
       "stopAtEntry": false,
       "cwd": "${fileDirname}",
