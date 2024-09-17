@@ -3,29 +3,51 @@
 #include <stdio.h>
 #include "misc.h"
 
-void fileio_write(char const *path, void *bytes, int size, char const *mode)
+#define TRUE 1
+#define FALSE 0
+
+int fileio_write(char const *path, void *bytes, int size, char const *mode)
 {
     FILE *file = fopen(path, mode);
     if (file)
     {
         fwrite(bytes, size, 1, file);
+        fclose(file);
+        return TRUE;
+    }
+    else
+    {
+        return FALSE;
     }
 }
 
-void fileio_read(char const *path, void **bytes, int *size, char const *mode)
+int fileio_size(char const *path, int *size)
+{
+    FILE *file = fopen(path, FILEIO_READ_BIN);
+    if (file)
+    {
+        fseek(file, 0L, SEEK_END);
+        *size = ftell(file);
+        fclose(file);
+        return TRUE;
+    }
+    else
+    {
+        return FALSE;
+    }
+}
+
+int fileio_read(char const *path, void *bytes, int size, char const *mode)
 {
     FILE *file = fopen(path, mode);
     if (file)
     {
-        fseek(file, 0L, SEEK_END);
-        int file_size = ftell(file);
-        rewind(file);
-        if (file_size > *size)
-        {
-            free(*bytes);
-            *bytes = mem_alloc(file_size);
-        }
-        *size = file_size;
-        fread(*bytes, file_size, 1, file);
+        fread(bytes, size, 1, file);
+        fclose(file);
+        return TRUE;
+    }
+    else
+    {
+        return FALSE;
     }
 }
