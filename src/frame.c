@@ -1,163 +1,21 @@
-#include "frame.h"
+#include "frame-new.h"
 #include "misc.h"
 #include "fileio.h"
 #include <stdlib.h>
 #include <string.h>
 
-typedef __int64_t u64;
-typedef __int32_t u32;
-typedef __int16_t u16;
-typedef __int8_t u8;
-
-struct frame frame_alloc(int num_rows, int num_cols)
-{
-    char **headers = mem_alloc(sizeof(char *) * num_cols);
-    char ***rows = mem_alloc(sizeof(char **) * num_rows);
-    for (int i = 0; i < num_rows; ++i)
-    {
-        rows[i] = mem_alloc(sizeof(char *) * num_cols);
-    }
-    struct frame df = {
-        .num_cols = num_cols,
-        .num_rows = num_rows,
-        .headers = headers,
-        .rows = rows};
-    return df;
-}
-
-void frame_free(struct frame df)
-{
-    free(df.headers);
-    for (int i = 0; i < df.num_rows; ++i)
-    {
-        free(df.rows[i]);
-    }
-    free(df.rows);
-}
-
-enum byte_dtype
-{
-    U8,
-    U16,
-    U32,
-    U64,
-    STRING,
-    CSV
-};
-
-static void get_bytes(void *bytes, int *index, int size, void *data, enum byte_dtype dtype)
-{
-    switch (dtype)
-    {
-    case U8:
-        if (size >= *index + sizeof(u8))
-        {
-            *(u8 *)data = *(u8 *)((u8 *)bytes + *index);
-            *index += sizeof(u8);
-        }
-        else
-        {
-            *(u8 *)data = 0;
-        }
-        break;
-    case U16:
-        if (size >= *index + sizeof(u16))
-        {
-            *(u16 *)data = *(u16 *)((u8 *)bytes + *index);
-            *index += sizeof(u16);
-        }
-        else
-        {
-            *(u16 *)data = 0;
-        }
-        break;
-    case U32:
-        if (size >= *index + sizeof(u32))
-        {
-            *(u32 *)data = *(u32 *)((u8 *)bytes + *index);
-            *index += sizeof(u32);
-        }
-        else
-        {
-            *(u32 *)data = 0;
-        }
-        break;
-    case U64:
-        if (size >= *index + sizeof(u64))
-        {
-            *(u64 *)data = *(u64 *)((u8 *)bytes + *index);
-            *index += sizeof(u64);
-        }
-        else
-        {
-            *(u64 *)data = 0;
-        }
-        break;
-    case STRING:
-    {
-        int str_len = 0;
-        while (size > *index + str_len)
-        {
-            if (*(char *)((u8 *)bytes + *index + str_len) == '\0')
-            {
-                break;
-            }
-            ++str_len;
-        }
-        char *string = mem_alloc(sizeof(char) * (str_len + 1));
-        int str_index = 0;
-        while (str_index < str_len)
-        {
-            string[str_index] = *(char *)((u8 *)bytes + *index);
-            ++*index;
-        }
-        string[str_len] = '\0';
-        ++*index;
-        *(char **)data = string;
-    }
-    break;
-    case CSV:
-    {
-        int str_len = 0;
-        while (size > *index + str_len)
-        {
-            char nchar = *(char *)((u8 *)bytes + *index + str_len);
-            if (nchar == ',' || nchar == '\n')
-            {
-                break;
-            }
-            ++str_len;
-        }
-        char *string = mem_alloc(sizeof(char) * (str_len + 1));
-        int str_index = 0;
-        while (str_index < str_len)
-        {
-            string[str_index] = *(char *)((u8 *)bytes + *index);
-            ++str_index;
-            ++*index;
-        }
-        string[str_len] = '\0';
-        ++*index;
-        *(char **)data = string;
-    }
-    break;
-    default:
-        break;
-    }
-}
-
-static int count_comma(void *bytes, int size)
+static int csv_num_cols(char *bytes, int csv_size)
 {
     int count = 0;
     int index = 0;
-    while (index < size)
+    while (index < csv_size)
     {
-        if (*((char *)bytes + index) == '\n')
+        if (bytes[index] == '\n')
         {
             ++count;
             break;
         }
-        else if (*((char *)bytes + index) == ',')
+        else if (bytes[index] == ',')
         {
             ++count;
         }
@@ -166,192 +24,189 @@ static int count_comma(void *bytes, int size)
     return count;
 }
 
-static int count_bn(void *bytes, int size)
+static int csv_num_rows(char *bytes, int csv_size)
 {
     int count = 0;
     int index = 0;
-    while (index < size)
+    while (index < csv_size)
     {
-        if (*((char *)bytes + index) == '\n')
+        if (bytes[index] == '\n')
         {
             ++count;
         }
         ++index;
     }
-    return count;
+    return count - 1;
 }
 
-static void get_headers_csv(struct frame *df, void *bytes, int *index, int size)
+static char *csv_get_string(char *bytes, int *index, int max_index)
 {
-    for (int i = 0; i < df->num_cols; ++i)
+    int str_len = 0;
+    while (bytes[*index + str_len] != ',' && bytes[*index + str_len] != '\n' && *index + str_len < max_index)
     {
-        get_bytes(bytes, index, size, &df->headers[i], CSV);
+        ++str_len;
+    }
+    char *string = mem_alloc(sizeof(char) * (str_len + 1));
+    for (int i = 0; i < str_len; ++i)
+    {
+        string[i] = bytes[*index];
+        ++*index;
+    }
+    string[str_len] = '\0';
+    ++*index;
+    return string;
+}
+
+static char **csv_get_headers(char *bytes, int num_cols, int *index, int max_index)
+{
+    char **headers = mem_alloc(sizeof(char *) * num_cols);
+    for (int i = 0; i < num_cols; ++i)
+    {
+        headers[i] = csv_get_string(bytes, index, max_index);
+    }
+    return headers;
+}
+
+static void csv_get_row(char ***cols, char *bytes, int row_index, int *index, int max_index, int num_cols)
+{
+    for (int i = 0; i < num_cols; ++i)
+    {
+        cols[i][row_index] = csv_get_string(bytes, index, max_index);
     }
 }
 
-static void get_row_csv(struct frame *df, void *bytes, int *index, int size, int row)
+static char ***csv_get_cols(char *bytes, int num_cols, int num_rows, int *index, int max_index)
 {
-    for (int i = 0; i < df->num_cols; ++i)
+    char ***cols = mem_alloc(sizeof(char **) * num_cols);
+    for (int i = 0; i < num_cols; ++i)
     {
-        get_bytes(bytes, index, size, &df->rows[row][i], CSV);
+        cols[i] = mem_alloc(sizeof(char *) * num_rows);
     }
-}
-
-struct frame frame_read_csv(char const *path)
-{
-    void *bytes = NULL;
-    int size = 0;
-    fileio_read(path, &bytes, &size, FILEIO_READ_ASCII);
-    int index = 0;
-    int num_rows = 0;
-    int num_cols = 0;
-    num_rows = count_bn(bytes, size) - 1;
-    num_cols = count_comma(bytes, size);
-    struct frame df = frame_alloc(num_rows, num_cols);
-    get_headers_csv(&df, bytes, &index, size);
     for (int i = 0; i < num_rows; ++i)
     {
-        get_row_csv(&df, bytes, &index, size, i);
+        csv_get_row(cols, bytes, i, index, max_index, num_cols);
     }
-    return df;
+    return cols;
 }
 
-#define KB 1024
-#define MB (1024 * KB)
-
-#define BYTES_INIT_SIZE (1 * KB)
-#define BYTES_INC_SIZE (1 * KB)
-
-static void dump_bytes(void **bytes, int *index, void *data, enum byte_dtype dtype, int *bytes_size)
+struct frame *frame_read_csv(char const *path)
 {
-    switch (dtype)
+    int csv_size = 0;
+    int success = fileio_size(path, &csv_size);
+    if (success)
     {
-    case U8:
-    {
-        if (*index + sizeof(u8) >= *bytes_size)
+        char *bytes = mem_alloc(csv_size);
+        success = fileio_read(path, bytes, csv_size, FILEIO_READ_ASCII);
+        if (success)
         {
-            *bytes = mem_realloc(*bytes, *bytes_size + BYTES_INC_SIZE);
-            *bytes_size += BYTES_INC_SIZE;
+            int num_cols = csv_num_cols(bytes, csv_size);
+            int num_rows = csv_num_rows(bytes, csv_size);
+            int index = 0;
+            char **headers = csv_get_headers(bytes, num_cols, &index, csv_size);
+            char ***cols = csv_get_cols(bytes, num_cols, num_rows, &index, csv_size);
+            struct frame *df = mem_alloc(sizeof(struct frame));
+            df->num_cols = num_cols;
+            df->num_rows = num_rows;
+            df->headers = headers;
+            df->cols = cols;
+            return df;
         }
-        *(u8 *)((u8 *)bytes + *index) = *(u8 *)data;
-        *index += sizeof(u8);
+        free(bytes);
     }
-    break;
-    case U16:
+    return NULL;
+}
+
+static int frame_csv_hsize(struct frame *df)
+{
+    int size = 0;
+    for (int i = 0; i < df->num_cols; ++i)
     {
-        if (*index + sizeof(u16) >= *bytes_size)
-        {
-            *bytes = mem_realloc(*bytes, *bytes_size + BYTES_INC_SIZE);
-            *bytes_size += BYTES_INC_SIZE;
-        }
-        *(u16 *)((u8 *)bytes + *index) = *(u16 *)data;
-        *index += sizeof(u16);
+        size += strlen(df->headers[i]) + sizeof(char);
     }
-    break;
-    case U32:
+    return size;
+}
+
+static int frame_csv_csize(struct frame *df)
+{
+    int size = 0;
+    for (int i = 0; i < df->num_cols; ++i)
     {
-        if (*index + sizeof(u32) >= *bytes_size)
+        for (int j = 0; j < df->num_rows; ++j)
         {
-            *bytes = mem_realloc(*bytes, *bytes_size + BYTES_INC_SIZE);
-            *bytes_size += BYTES_INC_SIZE;
+            size += strlen(df->cols[i][j]) + sizeof(char);
         }
-        *(u32 *)((u8 *)bytes + *index) = *(u32 *)data;
-        *index += sizeof(u32);
     }
-    break;
-    case U64:
+    return size;
+}
+
+static int frame_csv_size(struct frame *df)
+{
+    int size = 0;
+    size += frame_csv_hsize(df);
+    size += frame_csv_csize(df);
+    return size;
+}
+
+static void csv_dump_string(char *bytes, int *index, char *string)
+{
+    int len = strlen(string);
+    for (int i = 0; i < len; ++i)
     {
-        if (*index + sizeof(u64) >= *bytes_size)
-        {
-            *bytes = mem_realloc(*bytes, *bytes_size + BYTES_INC_SIZE);
-            *bytes_size += BYTES_INC_SIZE;
-        }
-        *(u64 *)((u8 *)bytes + *index) = *(u64 *)data;
-        *index += sizeof(u64);
-    }
-    break;
-    case STRING:
-    {
-        int str_len = strlen(*((char **)data));
-        int str_index = 0;
-        while (str_index < str_len)
-        {
-            if (*index + sizeof(char) >= *bytes_size)
-            {
-                *bytes = mem_realloc(*bytes, *bytes_size + BYTES_INC_SIZE);
-                *bytes_size += BYTES_INC_SIZE;
-            }
-            *(char *)((u8 *)bytes + *index) = ((*(char **)data))[str_index];
-            ++str_index;
-            ++*index;
-        }
-        if (*index + sizeof(char) >= *bytes_size)
-        {
-            *bytes = mem_realloc(*bytes, *bytes_size + BYTES_INC_SIZE);
-            *bytes_size += BYTES_INC_SIZE;
-        }
-        *(char *)((u8 *)bytes + *index) = '\0';
+        bytes[*index] = string[i];
         ++*index;
     }
-    break;
-    case CSV:
+    bytes[*index] = ',';
+    ++*index;
+}
+
+static void frame_write_csvh(char *bytes, struct frame *df, int *index)
+{
+    for (int i = 0; i < df->num_cols; ++i)
     {
-        int str_len = strlen(*((char **)data));
-        int str_index = 0;
-        while (str_index < str_len)
+        csv_dump_string(bytes, index, df->headers[i]);
+    }
+    bytes[*index - 1] = '\n';
+}
+
+static void frame_write_csvc(char *bytes, struct frame *df, int *index)
+{
+    for (int i = 0; i < df->num_rows; ++i)
+    {
+        for (int j = 0; j < df->num_cols; ++j)
         {
-            if (*index + sizeof(char) >= *bytes_size)
-            {
-                *bytes = mem_realloc(*bytes, *bytes_size + BYTES_INC_SIZE);
-                *bytes_size += BYTES_INC_SIZE;
-            }
-            *(char *)((u8 *)*bytes + *index) = ((*(char **)data))[str_index];
-            ++str_index;
-            ++*index;
+            csv_dump_string(bytes, index, df->cols[j][i]);
         }
-        if (*index + sizeof(char) >= *bytes_size)
-        {
-            *bytes = mem_realloc(*bytes, *bytes_size + BYTES_INC_SIZE);
-            *bytes_size += BYTES_INC_SIZE;
-        }
-        *(char *)((u8 *)*bytes + *index) = ',';
-        ++*index;
-        free(*((void **)data));
-    }
-    break;
-    default:
-        break;
+        bytes[*index - 1] = '\n';
     }
 }
 
-static void dump_headers_csv(struct frame df, void **bytes, int *index, int *bytes_size)
+int frame_write_csv(struct frame *df, char const *path)
 {
-    for (int i = 0; i < df.num_cols; ++i)
-    {
-        dump_bytes(bytes, index, &df.headers[i], CSV, bytes_size);
-    }
-    *((char *)(*bytes) + *index - 1) = '\n';
-}
-
-static void dump_row_csv(struct frame df, void **bytes, int *index, int row, int *bytes_size)
-{
-    for (int i = 0; i < df.num_cols; ++i)
-    {
-        dump_bytes(bytes, index, &df.rows[row][i], CSV, bytes_size);
-    }
-    *((char *)(*bytes) + *index - 1) = '\n';
-}
-
-void frame_write_csv(struct frame df, char const *path)
-{
-    void *bytes = mem_alloc(BYTES_INIT_SIZE);
+    int size = frame_csv_size(df);
+    char *bytes = mem_alloc(size);
     int index = 0;
-    int bytes_size = BYTES_INIT_SIZE;
-    dump_headers_csv(df, &bytes, &index, &bytes_size);
-    for (int i = 0; i < df.num_rows; ++i)
-    {
-        dump_row_csv(df, &bytes, &index, i, &bytes_size);
-    }
-    fileio_write(path, bytes, index - sizeof(char), FILEIO_WRITE_ASCII);
+    frame_write_csvh(bytes, df, &index);
+    frame_write_csvc(bytes, df, &index);
+    int success = fileio_write(path, bytes, size, FILEIO_WRITE_ASCII);
     free(bytes);
+    return success;
+}
+
+void frame_free(struct frame *df)
+{
+    for (int i = 0; i < df->num_cols; ++i)
+    {
+        free(df->headers[i]);
+    }
+    free(df->headers);
+    for (int i = 0; i < df->num_cols; ++i)
+    {
+        for (int j = 0; j < df->num_rows; ++j)
+        {
+            free(df->cols[i][j]);
+        }
+        free(df->cols[i]);
+    }
+    free(df->cols);
+    free(df);
 }

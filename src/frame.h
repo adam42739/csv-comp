@@ -1,17 +1,22 @@
 #pragma once
 
+enum csv_cdotype
+{
+    CSVCDOT_PKTINT,
+    CSVCDOT_MPLINT,
+    CSVCDOT_STRING
+};
+
 struct frame
 {
     int num_cols;
     int num_rows;
     char **headers;
-    char ***rows;
+    char ***cols;
 };
 
-struct frame frame_alloc(int num_rows, int num_cols);
+struct frame *frame_read_csv(char const *path);
 
-void frame_free(struct frame df);
+int frame_write_csv(struct frame *df, char const *path);
 
-struct frame frame_read_csv(char const *path);
-
-void frame_write_csv(struct frame df, char const *path);
+void frame_free(struct frame *df);
