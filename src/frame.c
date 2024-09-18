@@ -4,6 +4,23 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define TRUE 1
+#define FALSE 0
+
+typedef __uint8_t u8;
+typedef __uint16_t u16;
+typedef __uint32_t u32;
+typedef __uint64_t u64;
+
+enum param_dtype
+{
+    U8,
+    U16,
+    U32,
+    U64,
+    CHAR
+};
+
 static int csv_num_cols(char *bytes, int csv_size)
 {
     int count = 0;
@@ -209,4 +226,300 @@ void frame_free(struct frame *df)
     }
     free(df->cols);
     free(df);
+}
+
+static int bytes_load(void *bytes, int *index, int size, void *data, enum param_dtype dtype)
+{
+    switch (dtype)
+    {
+    case U8:
+    {
+        if (size >= *index + sizeof(u8))
+        {
+            *(u8 *)data = *(u8 *)(bytes + *index);
+            *index += sizeof(u8);
+            return TRUE;
+        }
+        else
+        {
+            return FALSE;
+        }
+    }
+    case U16:
+    {
+        if (size >= *index + sizeof(u8))
+        {
+            *(u16 *)data = *(u16 *)(bytes + *index);
+            *index += sizeof(u16);
+            return TRUE;
+        }
+        else
+        {
+            return FALSE;
+        }
+    }
+    case U32:
+    {
+        if (size >= *index + sizeof(u32))
+        {
+            *(u32 *)data = *(u32 *)(bytes + *index);
+            *index += sizeof(u32);
+            return TRUE;
+        }
+        else
+        {
+            return FALSE;
+        }
+    }
+    case U64:
+    {
+        if (size >= *index + sizeof(u64))
+        {
+            *(u64 *)data = *(u64 *)(bytes + *index);
+            *index += sizeof(u64);
+            return TRUE;
+        }
+        else
+        {
+            return FALSE;
+        }
+    }
+    case CHAR:
+    {
+        if (size >= *index + sizeof(char))
+        {
+            *(char *)data = *(char *)(bytes + *index);
+            *index += sizeof(char);
+            return TRUE;
+        }
+        else
+        {
+            return FALSE;
+        }
+    }
+    break;
+    default:
+        return FALSE;
+        break;
+    }
+}
+
+static void bytes_parse_string(char **string, void *bytes, int *index, int size)
+{
+    int length = 0;
+    while (*index + length < size)
+    {
+        if (*(char *)(bytes + *index + length) == '\0')
+        {
+            break;
+        }
+        else
+        {
+            ++length;
+        }
+    }
+    *string = mem_alloc(sizeof(char) * (length + 1));
+    for (int i = 0; i < length; ++i)
+    {
+        (*string)[i] = *(char *)(bytes + *index);
+        ++*index;
+    }
+    (*string)[length] = '\0';
+    ++*index;
+}
+
+static void bytes_parseh(void *bytes, int *index, int size, int num_cols, char ***headers)
+{
+    *headers = mem_alloc(sizeof(char *) * num_cols);
+    for (int i = 0; i < num_cols; ++i)
+    {
+        bytes_parse_string(&(*headers)[i], bytes, index, size);
+    }
+}
+
+#include <stdio.h>
+
+static struct frame *bytes_parse_df(void *bytes, int size)
+{
+    int index = 0;
+    int success = 1;
+    int num_rows = 0;
+    success = bytes_load(bytes, &index, size, (void *)&num_rows, U64);
+    if (!success)
+    {
+        return NULL;
+    }
+    int num_cols = 0;
+    success = bytes_load(bytes, &index, size, (void *)&num_cols, U64);
+    if (!success)
+    {
+        return NULL;
+    }
+    char **headers = NULL;
+    bytes_parseh(bytes, &index, size, num_cols, &headers);
+}
+
+struct frame *frame_read_bin(char const *path)
+{
+    int size = 0;
+    int success = fileio_size(path, &size);
+    if (success)
+    {
+        void *bytes = mem_alloc(size);
+        fileio_read(path, bytes, size, FILEIO_READ_BIN);
+        struct frame *df = bytes_parse_df(bytes, size);
+        free(bytes);
+        return df;
+    }
+    else
+    {
+        return NULL;
+    }
+}
+
+#define KB 1024
+#define MB 1024 * KB
+
+#define BYTES_INIT_SIZE 1 * MB
+#define BYTES_INC_SIZE 1 * MB
+
+static void bytes_dump(void **bytes, int *index, int *size, void *data, enum param_dtype dtype)
+{
+    switch (dtype)
+    {
+    case U8:
+    {
+        if (*size < *index + sizeof(u8))
+        {
+            *bytes = mem_realloc(*bytes, *size + BYTES_INC_SIZE);
+        }
+        *((u8 *)(*bytes + *index)) = *(u8 *)data;
+        *index += sizeof(u8);
+    }
+    break;
+    case U16:
+    {
+        if (*size < *index + sizeof(u16))
+        {
+            *bytes = mem_realloc(*bytes, *size + BYTES_INC_SIZE);
+        }
+        *((u16 *)(*bytes + *index)) = *(u16 *)data;
+        *index += sizeof(u16);
+    }
+    break;
+    case U32:
+    {
+        if (*size < *index + sizeof(u32))
+        {
+            *bytes = mem_realloc(*bytes, *size + BYTES_INC_SIZE);
+        }
+        *((u32 *)(*bytes + *index)) = *(u32 *)data;
+        *index += sizeof(u32);
+    }
+    break;
+    case U64:
+    {
+        if (*size < *index + sizeof(u64))
+        {
+            *bytes = mem_realloc(*bytes, *size + BYTES_INC_SIZE);
+        }
+        *((u64 *)(*bytes + *index)) = *(u64 *)data;
+        *index += sizeof(u64);
+    }
+    break;
+    case CHAR:
+    {
+        if (*size < *index + sizeof(char))
+        {
+            *bytes = mem_realloc(*bytes, *size + BYTES_INC_SIZE);
+        }
+        *((char *)(*bytes + *index)) = *(char *)data;
+        *index += sizeof(char);
+    }
+    break;
+    default:
+        break;
+    }
+}
+
+static void bytes_dump_string(char const *string, void *bytes, int *index, int *size)
+{
+    int length = strlen(string);
+    for (int i = 0; i < length; ++i)
+    {
+        bytes_dump(&bytes, index, size, (void *)&string[i], CHAR);
+    }
+    bytes_dump(&bytes, index, size, (void *)&string[length], CHAR);
+}
+
+static void frame_bin_bytesh(struct frame *df, void *bytes, int *index, int *size)
+{
+    for (int i = 0; i < df->num_cols; ++i)
+    {
+        bytes_dump_string(df->headers[i], bytes, index, size);
+    }
+}
+
+static int string_numeric(char const *string)
+{
+    int index = 0;
+    int numeric = TRUE;
+    while (string[index] != '\0')
+    {
+        if (!(string[index] >= '0' && string[index] <= '9'))
+        {
+            if (!(string[index] == '.'))
+            {
+                numeric = FALSE;
+                break;
+            }
+        }
+        ++index;
+    }
+    return numeric;
+}
+
+// CSVCDT_PKTINT
+// CSVCDT_MPLINT
+// CSVCDT_STRING
+
+static void frame_bin_bytescl(struct frame *df, void *bytes, int *index, int *size, int row)
+{
+    for (int i = 0; i < df->num_rows; ++i)
+    {
+        if (string_numeric(df->cols[i][row]))
+        {
+        }
+        else
+        {
+            size += strlen(df->cols[i][row]) + 1;
+        }
+    }
+}
+
+static void frame_bin_bytesc(struct frame *df, void *bytes, int *index, int *size)
+{
+    for (int i = 0; i < df->num_cols; ++i)
+    {
+        frame_bin_bytescl(df, bytes, index, size, i);
+    }
+}
+
+static void frame_bin_bytes(struct frame *df, void *bytes, int *index, int *size)
+{
+    bytes_dump(&bytes, index, size, &df->num_rows, U64);
+    bytes_dump(&bytes, index, size, &df->num_cols, U64);
+    frame_bin_bytesh(df, bytes, index, size);
+    // frame_bin_bytesc(df, bytes, index, size);
+}
+
+int frame_write_bin(struct frame *df, char const *path)
+{
+    int size = BYTES_INIT_SIZE;
+    void *bytes = mem_alloc(size);
+    int index = 0;
+    frame_bin_bytes(df, bytes, &index, &size);
+    int success = fileio_write(path, bytes, index, FILEIO_WRITE_BIN);
+    free(bytes);
+    return success;
 }
