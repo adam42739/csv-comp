@@ -24,6 +24,6 @@ struct frame
 
 struct frame *frame_read_csv(char const *path);
 
-void frame_write_csv(struct frame *df, char const *path);
+int frame_write_csv(struct frame *df, char const *path);
 
 void frame_free(struct frame *df);
