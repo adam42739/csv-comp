@@ -7,15 +7,21 @@ enum csv_cdtype
     CSVCDF_STRING
 };
 
+enum csv_cdotype
+{
+    CSVCDOT_PKTINT,
+    CSVCDOT_MPLINT,
+    CSVCDOT_STRING
+};
+
 struct frame
 {
     int num_cols;
     int num_rows;
-    enum csv_cdtype *cdtypes;
     char **headers;
-    void **cols;
+    char ***cols;
 };
 
-struct frame *frame_read_csv(char const *path, enum csv_cdtype *cdtypes);
+struct frame *frame_read_csv(char const *path);
 
 void frame_write_csv(struct frame *df, char const *path);

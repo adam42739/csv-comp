@@ -66,13 +66,31 @@ static char **csv_get_headers(char *bytes, int num_cols, int *index, int max_ind
     return headers;
 }
 
-static void **csv_get_cols(char *bytes, int num_cols, int num_rows, enum csv_cdtype *cdtypes, int *index, int max_index)
+static void csv_get_row(char ***cols, char *bytes, int row_index, int *index, int max_index, int num_cols)
 {
+    for (int i = 0; i < num_cols; ++i)
+    {
+        cols[i][row_index] = csv_get_string(bytes, index, max_index);
+    }
+}
+
+static char ***csv_get_cols(char *bytes, int num_cols, int num_rows, int *index, int max_index)
+{
+    char ***cols = mem_alloc(sizeof(char **) * num_cols);
+    for (int i = 0; i < num_cols; ++i)
+    {
+        cols[i] = mem_alloc(sizeof(char *) * num_rows);
+    }
+    for (int i = 0; i < num_rows; ++i)
+    {
+        csv_get_row(cols, bytes, i, index, max_index, num_cols);
+    }
+    return cols;
 }
 
 #include <stdio.h>
 
-struct frame *frame_read_csv(char const *path, enum csv_cdtype *cdtypes)
+struct frame *frame_read_csv(char const *path)
 {
     int csv_size = 0;
     int success = fileio_size(path, &csv_size);
@@ -86,7 +104,11 @@ struct frame *frame_read_csv(char const *path, enum csv_cdtype *cdtypes)
             int num_rows = csv_num_rows(bytes, csv_size);
             int index = 0;
             char **headers = csv_get_headers(bytes, num_cols, &index, csv_size);
-            void **cols = csv_get_cols(bytes, num_cols, num_rows, cdtypes, &index, csv_size);
+            char ***cols = csv_get_cols(bytes, num_cols, num_rows, &index, csv_size);
+            for (int i = 0; i < num_cols; ++i)
+            {
+                printf("%s\n", cols[i][10]);
+            }
         }
         free(bytes);
     }
