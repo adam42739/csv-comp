@@ -105,10 +105,12 @@ struct frame *frame_read_csv(char const *path)
             int index = 0;
             char **headers = csv_get_headers(bytes, num_cols, &index, csv_size);
             char ***cols = csv_get_cols(bytes, num_cols, num_rows, &index, csv_size);
-            for (int i = 0; i < num_cols; ++i)
-            {
-                printf("%s\n", cols[i][10]);
-            }
+            struct frame *df = mem_alloc(sizeof(struct frame));
+            df->num_cols = num_cols;
+            df->num_rows = num_rows;
+            df->headers = headers;
+            df->cols = cols;
+            return df;
         }
         free(bytes);
     }
@@ -117,4 +119,23 @@ struct frame *frame_read_csv(char const *path)
 
 void frame_write_csv(struct frame *df, char const *path)
 {
+}
+
+void frame_free(struct frame *df)
+{
+    for (int i = 0; i < df->num_cols; ++i)
+    {
+        free(df->headers[i]);
+    }
+    free(df->headers);
+    for (int i = 0; i < df->num_cols; ++i)
+    {
+        for (int j = 0; j < df->num_rows; ++j)
+        {
+            free(df->cols[i][j]);
+        }
+        free(df->cols[i]);
+    }
+    free(df->cols);
+    free(df);
 }

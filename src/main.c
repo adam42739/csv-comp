@@ -7,5 +7,6 @@ int main(int argc, char **argv)
     char const *buf_path = argv[2];
     char const *params = argv[3];
     struct frame *df = frame_read_csv(buf_path);
+    frame_free(df);
     return 0;
 }
