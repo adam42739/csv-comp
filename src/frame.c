@@ -363,8 +363,8 @@ static void bytes_parseh(void *bytes, int *index, int size, int num_cols, char *
 static int load_strsame(void *bytes, int *index, int size, char **col, int *row)
 {
     int success = TRUE;
-    u32 num_same = 0;
-    success = bytes_load(bytes, index, size, (void *)&num_same, U32);
+    u16 num_same = 0;
+    success = bytes_load(bytes, index, size, (void *)&num_same, U16);
     if (!success)
     {
         return FALSE;
@@ -611,7 +611,7 @@ static float comp_strsame(struct frame *df, int row, int col)
 {
     int num_same = num_strsame(df, row, col);
     int high_size = num_same * strlen(df->cols[col][row]);
-    int low_size = sizeof(u32) + strlen(df->cols[col][row]);
+    int low_size = sizeof(u16) + strlen(df->cols[col][row]);
     return (((float)low_size) / ((float)high_size));
 }
 
@@ -644,8 +644,8 @@ static void dump_strsame(struct frame *df, void **bytes, int *index, int *size, 
     int num_same = num_strsame(df, *row, col);
     u8 indchr = (u8)STRING_SAMES;
     bytes_dump(bytes, index, size, (void *)&indchr, U8);
-    u32 nsame = (u32)num_same;
-    bytes_dump(bytes, index, size, (void *)&nsame, U32);
+    u16 nsame = (u16)num_same;
+    bytes_dump(bytes, index, size, (void *)&nsame, U16);
     bytes_dump_string(df->cols[col][*row], bytes, index, size);
     *row += num_same;
 }
