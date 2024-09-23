@@ -379,8 +379,16 @@ static int load_strsame(void *bytes, int *index, int size, char **col, int *row)
     *index += length + 1;
 }
 
+static int load_strdiff(void *bytes, int *index, int size, char **col, int *row)
+{
+    int success = TRUE;
+    int length = bytes_parse_string(&col[*row], bytes, index, size);
+    ++*row;
+}
+
 int (*LOAD_FUNCS[])(void *, int *, int, char **, int *) = {
-    load_strsame};
+    load_strsame,
+    load_strdiff};
 
 #define NUM_LOAD_FUNCS (sizeof(LOAD_FUNCS) / sizeof(LOAD_FUNCS[0]))
 
@@ -607,7 +615,13 @@ static float comp_strsame(struct frame *df, int row, int col)
     return (((float)low_size) / ((float)high_size));
 }
 
-static float comp_strdiff(struct frame *df, int row, int col) {}
+static float comp_strdiff(struct frame *df, int row, int col)
+{
+    int high_size = strlen(df->cols[col][row]);
+    int low_size = strlen(df->cols[col][row]);
+    return (((float)low_size) / ((float)high_size));
+}
+
 static float comp_u8same(struct frame *df, int row, int col) {}
 static float comp_u8diff(struct frame *df, int row, int col) {}
 static float comp_u8inc(struct frame *df, int row, int col) {}
@@ -636,7 +650,14 @@ static void dump_strsame(struct frame *df, void **bytes, int *index, int *size, 
     *row += num_same;
 }
 
-static void dump_strdiff(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
+static void dump_strdiff(struct frame *df, void **bytes, int *index, int *size, int *row, int col)
+{
+    u8 indchr = (u8)STRING_DIFFS;
+    bytes_dump(bytes, index, size, (void *)&indchr, U8);
+    bytes_dump_string(df->cols[col][*row], bytes, index, size);
+    ++*row;
+}
+
 static void dump_u8same(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u8diff(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u8inc(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
@@ -703,17 +724,16 @@ static void frame_bin_bytescl(struct frame *df, void **bytes, int *index, int *s
     {
         float max_comp = comp_strsame(df, row, col);
         int max_index = 0;
-        for (int i = 1; i < NUM_CDFUNCS; ++i)
+        for (int i = 1; i < 2; ++i)
         {
-            // float comp = COMP_FUNCS[i](df, row, col);
-            // if (comp < max_comp)
-            // {
-            //     max_comp = comp;
-            //     max_index = i;
-            // }
+            float comp = COMP_FUNCS[i](df, row, col);
+            if (comp < max_comp)
+            {
+                max_comp = comp;
+                max_index = i;
+            }
         }
         DUMP_FUNCS[max_index](df, bytes, index, size, &row, col);
-        int a = 0;
     }
 }
 

@@ -10,6 +10,7 @@ int main(int argc, char **argv)
     frame_write_bin(df, out_path);
     frame_free(df);
     df = frame_read_bin(out_path);
+    frame_write_csv(df, out_path);
     frame_free(df);
     return 0;
 }
