@@ -610,6 +610,10 @@ static int num_strsame(struct frame *df, int row, int col)
 static float comp_strsame(struct frame *df, int row, int col)
 {
     int num_same = num_strsame(df, row, col);
+    if (num_same > UINT16_MAX)
+    {
+        num_same = UINT16_MAX;
+    }
     int high_size = num_same * strlen(df->cols[col][row]);
     int low_size = sizeof(u16) + strlen(df->cols[col][row]);
     return (((float)low_size) / ((float)high_size));
@@ -642,6 +646,10 @@ static float comp_u64dec(struct frame *df, int row, int col) {}
 static void dump_strsame(struct frame *df, void **bytes, int *index, int *size, int *row, int col)
 {
     int num_same = num_strsame(df, *row, col);
+    if (num_same > UINT16_MAX)
+    {
+        num_same = UINT16_MAX;
+    }
     u8 indchr = (u8)STRING_SAMES;
     bytes_dump(bytes, index, size, (void *)&indchr, U8);
     u16 nsame = (u16)num_same;
