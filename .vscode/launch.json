@@ -5,13 +5,30 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug",
+      "name": "Debug-Compress",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/debug/out/build/opt_file_comp",
       "args": [
-        "/Users/adamlynch/Documents/HobbyWork/csv-comp/files/aapl=2024-09-03.csvc",
-        "/Users/adamlynch/Documents/HobbyWork/csv-comp/files/aapl=2024-09-03.csv"
+        "-c",
+        "/Users/adamlynch/Documents/HobbyWork/csv-comp/files/aapl=2024-09-23.csvc",
+        "/Users/adamlynch/Documents/HobbyWork/csv-comp/files/aapl=2024-09-23.csv"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb"
+    },
+    {
+      "name": "Debug-Decompress",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/debug/out/build/opt_file_comp",
+      "args": [
+        "-dc",
+        "/Users/adamlynch/Documents/HobbyWork/csv-comp/files/aapl=2024-09-23.csvc",
+        "/Users/adamlynch/Documents/HobbyWork/csv-comp/files/aapl=2024-09-23-dc.csv"
       ],
       "stopAtEntry": false,
       "cwd": "${fileDirname}",
