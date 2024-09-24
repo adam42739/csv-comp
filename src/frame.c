@@ -482,10 +482,88 @@ static int load_u8same(void *bytes, int *index, int size, char **col, int *row)
     return TRUE;
 }
 
+static int load_u16same(void *bytes, int *index, int size, char **col, int *row)
+{
+    int success = TRUE;
+    u16 num_same = 0;
+    success = bytes_load(bytes, index, size, (void *)&num_same, U16);
+    if (!success)
+    {
+        return FALSE;
+    }
+    u8 factor = 0;
+    success = bytes_load(bytes, index, size, (void *)&factor, U8);
+    u16 value = 0;
+    success = bytes_load(bytes, index, size, (void *)&value, U16);
+    int len;
+    char *buffer = u64_to_string((u64)value, factor, &len);
+    for (int i = 0; i < num_same; ++i)
+    {
+        col[*row] = mem_alloc(sizeof(char) * (len + 1));
+        memcpy(col[*row], buffer, sizeof(char) * (len + 1));
+        ++*row;
+    }
+    free(buffer);
+    return TRUE;
+}
+
+static int load_u32same(void *bytes, int *index, int size, char **col, int *row)
+{
+    int success = TRUE;
+    u16 num_same = 0;
+    success = bytes_load(bytes, index, size, (void *)&num_same, U16);
+    if (!success)
+    {
+        return FALSE;
+    }
+    u8 factor = 0;
+    success = bytes_load(bytes, index, size, (void *)&factor, U8);
+    u32 value = 0;
+    success = bytes_load(bytes, index, size, (void *)&value, U32);
+    int len;
+    char *buffer = u64_to_string((u64)value, factor, &len);
+    for (int i = 0; i < num_same; ++i)
+    {
+        col[*row] = mem_alloc(sizeof(char) * (len + 1));
+        memcpy(col[*row], buffer, sizeof(char) * (len + 1));
+        ++*row;
+    }
+    free(buffer);
+    return TRUE;
+}
+
+static int load_u64same(void *bytes, int *index, int size, char **col, int *row)
+{
+    int success = TRUE;
+    u16 num_same = 0;
+    success = bytes_load(bytes, index, size, (void *)&num_same, U16);
+    if (!success)
+    {
+        return FALSE;
+    }
+    u8 factor = 0;
+    success = bytes_load(bytes, index, size, (void *)&factor, U8);
+    u64 value = 0;
+    success = bytes_load(bytes, index, size, (void *)&value, U64);
+    int len;
+    char *buffer = u64_to_string((u64)value, factor, &len);
+    for (int i = 0; i < num_same; ++i)
+    {
+        col[*row] = mem_alloc(sizeof(char) * (len + 1));
+        memcpy(col[*row], buffer, sizeof(char) * (len + 1));
+        ++*row;
+    }
+    free(buffer);
+    return TRUE;
+}
+
 int (*LOAD_FUNCS[])(void *, int *, int, char **, int *) = {
     load_strsame,
     load_strdiff,
-    load_u8same};
+    load_u8same,
+    load_u16same,
+    load_u32same,
+    load_u64same};
 
 #define NUM_LOAD_FUNCS (sizeof(LOAD_FUNCS) / sizeof(LOAD_FUNCS[0]))
 
@@ -866,6 +944,86 @@ static int u8_possible(struct frame *df, int row, int col)
     }
 }
 
+static int u16_possible(struct frame *df, int row, int col)
+{
+    if (uint_possible(df, row, col))
+    {
+        u64 value;
+        u8 factor;
+        int success = string_to_u64(df->cols[col][row], &value, &factor);
+        if (!success)
+        {
+            return FALSE;
+        }
+        else
+        {
+            if (value <= UINT16_MAX)
+            {
+                return TRUE;
+            }
+            else
+            {
+                return FALSE;
+            }
+        }
+    }
+    else
+    {
+        return FALSE;
+    }
+}
+
+static int u32_possible(struct frame *df, int row, int col)
+{
+    if (uint_possible(df, row, col))
+    {
+        u64 value;
+        u8 factor;
+        int success = string_to_u64(df->cols[col][row], &value, &factor);
+        if (!success)
+        {
+            return FALSE;
+        }
+        else
+        {
+            if (value <= UINT32_MAX)
+            {
+                return TRUE;
+            }
+            else
+            {
+                return FALSE;
+            }
+        }
+    }
+    else
+    {
+        return FALSE;
+    }
+}
+
+static int u64_possible(struct frame *df, int row, int col)
+{
+    if (uint_possible(df, row, col))
+    {
+        u64 value;
+        u8 factor;
+        int success = string_to_u64(df->cols[col][row], &value, &factor);
+        if (!success)
+        {
+            return FALSE;
+        }
+        else
+        {
+            return TRUE;
+        }
+    }
+    else
+    {
+        return FALSE;
+    }
+}
+
 static float comp_u8same(struct frame *df, int row, int col)
 {
     if (u8_possible(df, row, col))
@@ -888,15 +1046,72 @@ static float comp_u8same(struct frame *df, int row, int col)
 static float comp_u8diff(struct frame *df, int row, int col) {}
 static float comp_u8inc(struct frame *df, int row, int col) {}
 static float comp_u8dec(struct frame *df, int row, int col) {}
-static float comp_u16same(struct frame *df, int row, int col) {}
+
+static float comp_u16same(struct frame *df, int row, int col)
+{
+    if (u16_possible(df, row, col))
+    {
+        int num_same = num_strsame(df, row, col);
+        if (num_same > UINT16_MAX)
+        {
+            num_same = UINT16_MAX;
+        }
+        int high_size = num_same * strlen(df->cols[col][row]);
+        int low_size = sizeof(u16) + sizeof(u8) + sizeof(u16);
+        return (((float)low_size) / ((float)high_size));
+    }
+    else
+    {
+        return FLT_MAX;
+    }
+}
+
 static float comp_u16diff(struct frame *df, int row, int col) {}
 static float comp_u16inc(struct frame *df, int row, int col) {}
 static float comp_u16dec(struct frame *df, int row, int col) {}
-static float comp_u32same(struct frame *df, int row, int col) {}
+
+static float comp_u32same(struct frame *df, int row, int col)
+{
+    if (u32_possible(df, row, col))
+    {
+        int num_same = num_strsame(df, row, col);
+        if (num_same > UINT16_MAX)
+        {
+            num_same = UINT16_MAX;
+        }
+        int high_size = num_same * strlen(df->cols[col][row]);
+        int low_size = sizeof(u16) + sizeof(u8) + sizeof(u32);
+        return (((float)low_size) / ((float)high_size));
+    }
+    else
+    {
+        return FLT_MAX;
+    }
+}
+
 static float comp_u32diff(struct frame *df, int row, int col) {}
 static float comp_u32inc(struct frame *df, int row, int col) {}
 static float comp_u32dec(struct frame *df, int row, int col) {}
-static float comp_u64same(struct frame *df, int row, int col) {}
+
+static float comp_u64same(struct frame *df, int row, int col)
+{
+    if (u64_possible(df, row, col))
+    {
+        int num_same = num_strsame(df, row, col);
+        if (num_same > UINT16_MAX)
+        {
+            num_same = UINT16_MAX;
+        }
+        int high_size = num_same * strlen(df->cols[col][row]);
+        int low_size = sizeof(u16) + sizeof(u8) + sizeof(u64);
+        return (((float)low_size) / ((float)high_size));
+    }
+    else
+    {
+        return FLT_MAX;
+    }
+}
+
 static float comp_u64diff(struct frame *df, int row, int col) {}
 static float comp_u64inc(struct frame *df, int row, int col) {}
 static float comp_u64dec(struct frame *df, int row, int col) {}
@@ -960,15 +1175,75 @@ static void dump_u8same(struct frame *df, void **bytes, int *index, int *size, i
 static void dump_u8diff(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u8inc(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u8dec(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
-static void dump_u16same(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
+
+static void dump_u16same(struct frame *df, void **bytes, int *index, int *size, int *row, int col)
+{
+    int num_same = num_strsame(df, *row, col);
+    if (num_same > UINT16_MAX)
+    {
+        num_same = UINT16_MAX;
+    }
+    u8 indchr = (u8)U16_SAMES;
+    bytes_dump(bytes, index, size, (void *)&indchr, U8);
+    u16 nsame = (u16)num_same;
+    bytes_dump(bytes, index, size, (void *)&nsame, U16);
+    u8 factor;
+    u64 u_int;
+    (void)string_to_u64(df->cols[col][*row], &u_int, &factor);
+    bytes_dump(bytes, index, size, (void *)&factor, U8);
+    u16 value = (u16)u_int;
+    bytes_dump(bytes, index, size, (void *)&value, U16);
+    *row += num_same;
+}
+
 static void dump_u16diff(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u16inc(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u16dec(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
-static void dump_u32same(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
+
+static void dump_u32same(struct frame *df, void **bytes, int *index, int *size, int *row, int col)
+{
+    int num_same = num_strsame(df, *row, col);
+    if (num_same > UINT16_MAX)
+    {
+        num_same = UINT16_MAX;
+    }
+    u8 indchr = (u8)U32_SAMES;
+    bytes_dump(bytes, index, size, (void *)&indchr, U8);
+    u16 nsame = (u16)num_same;
+    bytes_dump(bytes, index, size, (void *)&nsame, U16);
+    u8 factor;
+    u64 u_int;
+    (void)string_to_u64(df->cols[col][*row], &u_int, &factor);
+    bytes_dump(bytes, index, size, (void *)&factor, U8);
+    u32 value = (u32)u_int;
+    bytes_dump(bytes, index, size, (void *)&value, U32);
+    *row += num_same;
+}
+
 static void dump_u32diff(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u32inc(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u32dec(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
-static void dump_u64same(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
+
+static void dump_u64same(struct frame *df, void **bytes, int *index, int *size, int *row, int col)
+{
+    int num_same = num_strsame(df, *row, col);
+    if (num_same > UINT16_MAX)
+    {
+        num_same = UINT16_MAX;
+    }
+    u8 indchr = (u8)U64_SAMES;
+    bytes_dump(bytes, index, size, (void *)&indchr, U8);
+    u16 nsame = (u16)num_same;
+    bytes_dump(bytes, index, size, (void *)&nsame, U16);
+    u8 factor;
+    u64 u_int;
+    (void)string_to_u64(df->cols[col][*row], &u_int, &factor);
+    bytes_dump(bytes, index, size, (void *)&factor, U8);
+    u64 value = (u64)u_int;
+    bytes_dump(bytes, index, size, (void *)&value, U64);
+    *row += num_same;
+}
+
 static void dump_u64diff(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u64inc(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u64dec(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
