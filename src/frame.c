@@ -3,9 +3,14 @@
 #include "fileio.h"
 #include <stdlib.h>
 #include <string.h>
+#include <float.h>
+#include <math.h>
+#include <stdio.h>
 
 #define TRUE 1
 #define FALSE 0
+
+#define MAX(A, B) (A > B ? A : B)
 
 typedef __uint8_t u8;
 typedef __uint16_t u16;
@@ -377,18 +382,110 @@ static int load_strsame(void *bytes, int *index, int size, char **col, int *row)
         ++*row;
     }
     *index += length + 1;
+    return TRUE;
 }
 
 static int load_strdiff(void *bytes, int *index, int size, char **col, int *row)
 {
     int success = TRUE;
-    int length = bytes_parse_string(&col[*row], bytes, index, size);
-    ++*row;
+    u16 num_diff;
+    success = bytes_load(bytes, index, size, (void *)&num_diff, U16);
+    if (!success)
+    {
+        return FALSE;
+    }
+    for (int i = 0; i < num_diff; ++i)
+    {
+        (void)bytes_parse_string(&col[*row], bytes, index, size);
+        ++*row;
+    }
+    return TRUE;
+}
+
+static char *u64_to_string(u64 value, u8 factor, int *len)
+{
+    int num_buff;
+    if (num_buff == 0)
+    {
+        num_buff = 1;
+    }
+    else
+    {
+        num_buff = (int)floor(log10((double)value)) + 1;
+    }
+    char *buffer = mem_alloc(sizeof(char) * (num_buff + 1));
+    sprintf(buffer, "%llu", value);
+    buffer[num_buff] = '\0';
+    int num_str = MAX(factor, num_buff) + 1;
+    if (factor == 0)
+    {
+        --num_str;
+    }
+    if (factor >= num_buff)
+    {
+        ++num_str;
+    }
+    char *string = mem_alloc(sizeof(char) * (num_str + 1));
+    int str_index = num_str - 1;
+    int buf_index = num_buff - 1;
+    int count = 0;
+    while (str_index >= 0)
+    {
+        if (count == (int)factor && factor != 0)
+        {
+            string[str_index] = '.';
+        }
+        else if (buf_index >= 0)
+        {
+            string[str_index] = buffer[buf_index];
+            --buf_index;
+        }
+        else
+        {
+            string[str_index] = '0';
+        }
+        --str_index;
+        ++count;
+    }
+    if (factor >= num_buff)
+    {
+        string[0] = '0';
+    }
+    string[num_str] = '\0';
+    *len = num_str;
+    free(buffer);
+    return string;
+}
+
+static int load_u8same(void *bytes, int *index, int size, char **col, int *row)
+{
+    int success = TRUE;
+    u16 num_same = 0;
+    success = bytes_load(bytes, index, size, (void *)&num_same, U16);
+    if (!success)
+    {
+        return FALSE;
+    }
+    u8 factor = 0;
+    success = bytes_load(bytes, index, size, (void *)&factor, U8);
+    u8 value = 0;
+    success = bytes_load(bytes, index, size, (void *)&value, U8);
+    int len;
+    char *buffer = u64_to_string((u64)value, factor, &len);
+    for (int i = 0; i < num_same; ++i)
+    {
+        col[*row] = mem_alloc(sizeof(char) * (len + 1));
+        memcpy(col[*row], buffer, sizeof(char) * (len + 1));
+        ++*row;
+    }
+    free(buffer);
+    return TRUE;
 }
 
 int (*LOAD_FUNCS[])(void *, int *, int, char **, int *) = {
     load_strsame,
-    load_strdiff};
+    load_strdiff,
+    load_u8same};
 
 #define NUM_LOAD_FUNCS (sizeof(LOAD_FUNCS) / sizeof(LOAD_FUNCS[0]))
 
@@ -621,12 +718,173 @@ static float comp_strsame(struct frame *df, int row, int col)
 
 static float comp_strdiff(struct frame *df, int row, int col)
 {
-    int high_size = strlen(df->cols[col][row]);
-    int low_size = strlen(df->cols[col][row]);
-    return (((float)low_size) / ((float)high_size));
+    return 1;
 }
 
-static float comp_u8same(struct frame *df, int row, int col) {}
+static int isdigit(char c)
+{
+    if (c >= '0' && c <= '9')
+    {
+        return TRUE;
+    }
+    else
+    {
+        return FALSE;
+    }
+}
+
+static int uint_possible(struct frame *df, int row, int col)
+{
+    int str_len = strlen(df->cols[col][row]);
+    int possible = TRUE;
+    int found_dec = FALSE;
+    for (int i = 0; i < str_len; ++i)
+    {
+        if (!isdigit(df->cols[col][row][i]))
+        {
+            if (df->cols[col][row][i] == '.')
+            {
+                if (found_dec)
+                {
+                    possible = FALSE;
+                    break;
+                }
+                else
+                {
+                    found_dec = TRUE;
+                }
+            }
+            else
+            {
+                possible = FALSE;
+                break;
+            }
+        }
+    }
+    return possible;
+}
+
+static int stou64_hasdec(char const *string)
+{
+    int len = strlen(string);
+    for (int i = 0; i < len; ++i)
+    {
+        if (string[i] == '.')
+        {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static int compute_u64_convfactor(char const *string, u8 *factor)
+{
+    *factor = 0;
+    int len = strlen(string);
+    for (int i = len - 1; i >= 0; --i)
+    {
+        if (string[i] == '.')
+        {
+            break;
+        }
+        else
+        {
+            if (*factor == UINT8_MAX)
+            {
+                return FALSE;
+            }
+            else
+            {
+                ++*factor;
+            }
+        }
+    }
+    return TRUE;
+}
+
+static int string_to_u64(char const *string, u64 *u_int, u8 *factor)
+{
+    int len = strlen(string);
+    if (stou64_hasdec(string))
+    {
+        int success = compute_u64_convfactor(string, factor);
+        if (!success)
+        {
+            return FALSE;
+        }
+    }
+    else
+    {
+        *factor = 0;
+    }
+    *u_int = 0;
+    u64 mul = 1;
+    for (int i = len - 1; i >= 0; --i)
+    {
+        if (string[i] != '.')
+        {
+            if (*u_int > UINT64_MAX / 100)
+            {
+                return FALSE;
+            }
+            else
+            {
+                *u_int += (string[i] - '0') * mul;
+                mul *= 10;
+            }
+        }
+    }
+    return TRUE;
+}
+
+static int u8_possible(struct frame *df, int row, int col)
+{
+    if (uint_possible(df, row, col))
+    {
+        u64 value;
+        u8 factor;
+        int success = string_to_u64(df->cols[col][row], &value, &factor);
+        if (!success)
+        {
+            return FALSE;
+        }
+        else
+        {
+            if (value <= UINT8_MAX)
+            {
+                return TRUE;
+            }
+            else
+            {
+                return FALSE;
+            }
+        }
+    }
+    else
+    {
+        return FALSE;
+    }
+}
+
+static float comp_u8same(struct frame *df, int row, int col)
+{
+    if (u8_possible(df, row, col))
+    {
+        int num_same = num_strsame(df, row, col);
+        if (num_same > UINT16_MAX)
+        {
+            num_same = UINT16_MAX;
+        }
+        int high_size = num_same * strlen(df->cols[col][row]);
+        int low_size = sizeof(u16) + sizeof(u8) + sizeof(u8);
+        return (((float)low_size) / ((float)high_size));
+    }
+    else
+    {
+        return FLT_MAX;
+    }
+}
+
 static float comp_u8diff(struct frame *df, int row, int col) {}
 static float comp_u8inc(struct frame *df, int row, int col) {}
 static float comp_u8dec(struct frame *df, int row, int col) {}
@@ -662,11 +920,43 @@ static void dump_strdiff(struct frame *df, void **bytes, int *index, int *size, 
 {
     u8 indchr = (u8)STRING_DIFFS;
     bytes_dump(bytes, index, size, (void *)&indchr, U8);
-    bytes_dump_string(df->cols[col][*row], bytes, index, size);
-    ++*row;
+    u16 num_diff;
+    if (df->num_rows - *row > UINT16_MAX)
+    {
+        num_diff = UINT16_MAX;
+    }
+    else
+    {
+        num_diff = (u16)(df->num_rows - *row);
+    }
+    bytes_dump(bytes, index, size, (void *)&num_diff, U16);
+    for (int i = 0; i < num_diff; ++i)
+    {
+        bytes_dump_string(df->cols[col][*row], bytes, index, size);
+        ++*row;
+    }
 }
 
-static void dump_u8same(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
+static void dump_u8same(struct frame *df, void **bytes, int *index, int *size, int *row, int col)
+{
+    int num_same = num_strsame(df, *row, col);
+    if (num_same > UINT16_MAX)
+    {
+        num_same = UINT16_MAX;
+    }
+    u8 indchr = (u8)U8_SAMES;
+    bytes_dump(bytes, index, size, (void *)&indchr, U8);
+    u16 nsame = (u16)num_same;
+    bytes_dump(bytes, index, size, (void *)&nsame, U16);
+    u8 factor;
+    u64 u_int;
+    (void)string_to_u64(df->cols[col][*row], &u_int, &factor);
+    bytes_dump(bytes, index, size, (void *)&factor, U8);
+    u8 value = (u8)u_int;
+    bytes_dump(bytes, index, size, (void *)&value, U8);
+    *row += num_same;
+}
+
 static void dump_u8diff(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u8inc(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u8dec(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
@@ -732,7 +1022,7 @@ static void frame_bin_bytescl(struct frame *df, void **bytes, int *index, int *s
     {
         float max_comp = comp_strsame(df, row, col);
         int max_index = 0;
-        for (int i = 1; i < 2; ++i)
+        for (int i = 1; i < 3; ++i)
         {
             float comp = COMP_FUNCS[i](df, row, col);
             if (comp < max_comp)
