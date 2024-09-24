@@ -549,6 +549,29 @@ static int load_u16same(void *bytes, int *index, int size, char **col, int *row)
     return TRUE;
 }
 
+static int load_u16diff(void *bytes, int *index, int size, char **col, int *row)
+{
+    int success = TRUE;
+    u16 num = 0;
+    success = bytes_load(bytes, index, size, (void *)&num, U16);
+    if (!success)
+    {
+        return FALSE;
+    }
+    u8 factor = 0;
+    success = bytes_load(bytes, index, size, (void *)&factor, U8);
+    for (int i = 0; i < num; ++i)
+    {
+        u16 value = 0;
+        success = bytes_load(bytes, index, size, (void *)&value, U16);
+        int len;
+        char *buffer = u64_to_string((u64)value, factor, &len);
+        col[*row] = buffer;
+        ++*row;
+    }
+    return TRUE;
+}
+
 static int load_u32same(void *bytes, int *index, int size, char **col, int *row)
 {
     int success = TRUE;
@@ -571,6 +594,29 @@ static int load_u32same(void *bytes, int *index, int size, char **col, int *row)
         ++*row;
     }
     free(buffer);
+    return TRUE;
+}
+
+static int load_u32diff(void *bytes, int *index, int size, char **col, int *row)
+{
+    int success = TRUE;
+    u16 num = 0;
+    success = bytes_load(bytes, index, size, (void *)&num, U16);
+    if (!success)
+    {
+        return FALSE;
+    }
+    u8 factor = 0;
+    success = bytes_load(bytes, index, size, (void *)&factor, U8);
+    for (int i = 0; i < num; ++i)
+    {
+        u32 value = 0;
+        success = bytes_load(bytes, index, size, (void *)&value, U32);
+        int len;
+        char *buffer = u64_to_string((u64)value, factor, &len);
+        col[*row] = buffer;
+        ++*row;
+    }
     return TRUE;
 }
 
@@ -599,14 +645,48 @@ static int load_u64same(void *bytes, int *index, int size, char **col, int *row)
     return TRUE;
 }
 
+static int load_u64diff(void *bytes, int *index, int size, char **col, int *row)
+{
+    int success = TRUE;
+    u16 num = 0;
+    success = bytes_load(bytes, index, size, (void *)&num, U16);
+    if (!success)
+    {
+        return FALSE;
+    }
+    u8 factor = 0;
+    success = bytes_load(bytes, index, size, (void *)&factor, U8);
+    for (int i = 0; i < num; ++i)
+    {
+        u64 value = 0;
+        success = bytes_load(bytes, index, size, (void *)&value, U64);
+        int len;
+        char *buffer = u64_to_string((u64)value, factor, &len);
+        col[*row] = buffer;
+        ++*row;
+    }
+    return TRUE;
+}
+
 int (*LOAD_FUNCS[])(void *, int *, int, char **, int *) = {
     load_strsame,
     load_strdiff,
     load_u8same,
     load_u8diff,
+    NULL,
+    NULL,
     load_u16same,
+    load_u16diff,
+    NULL,
+    NULL,
     load_u32same,
-    load_u64same};
+    load_u32diff,
+    NULL,
+    NULL,
+    load_u64same,
+    load_u64diff,
+    NULL,
+    NULL};
 
 #define NUM_LOAD_FUNCS (sizeof(LOAD_FUNCS) / sizeof(LOAD_FUNCS[0]))
 
@@ -958,7 +1038,6 @@ static int string_to_u64(char const *string, u64 *u_int, u8 *factor)
     return TRUE;
 }
 
-// max_factors for other u#_possibles
 static int u8_possible(struct frame *df, int row, int col, u8 *factor, u8 *max_factor)
 {
     if (uint_possible(df, row, col))
@@ -1000,13 +1079,12 @@ static int u8_possible(struct frame *df, int row, int col, u8 *factor, u8 *max_f
     }
 }
 
-static int u16_possible(struct frame *df, int row, int col)
+static int u16_possible(struct frame *df, int row, int col, u8 *factor, u8 *max_factor)
 {
     if (uint_possible(df, row, col))
     {
         u64 value;
-        u8 factor;
-        int success = string_to_u64(df->cols[col][row], &value, &factor);
+        int success = string_to_u64(df->cols[col][row], &value, factor);
         if (!success)
         {
             return FALSE;
@@ -1015,6 +1093,19 @@ static int u16_possible(struct frame *df, int row, int col)
         {
             if (value <= UINT16_MAX)
             {
+                if (value == 0)
+                {
+                    *max_factor = UINT8_MAX;
+                }
+                else
+                {
+                    *max_factor = *factor;
+                    while (value * 10 < UINT16_MAX)
+                    {
+                        value *= 10;
+                        ++*max_factor;
+                    }
+                }
                 return TRUE;
             }
             else
@@ -1029,13 +1120,12 @@ static int u16_possible(struct frame *df, int row, int col)
     }
 }
 
-static int u32_possible(struct frame *df, int row, int col)
+static int u32_possible(struct frame *df, int row, int col, u8 *factor, u8 *max_factor)
 {
     if (uint_possible(df, row, col))
     {
         u64 value;
-        u8 factor;
-        int success = string_to_u64(df->cols[col][row], &value, &factor);
+        int success = string_to_u64(df->cols[col][row], &value, factor);
         if (!success)
         {
             return FALSE;
@@ -1044,6 +1134,19 @@ static int u32_possible(struct frame *df, int row, int col)
         {
             if (value <= UINT32_MAX)
             {
+                if (value == 0)
+                {
+                    *max_factor = UINT8_MAX;
+                }
+                else
+                {
+                    *max_factor = *factor;
+                    while (value * 10 < UINT32_MAX)
+                    {
+                        value *= 10;
+                        ++*max_factor;
+                    }
+                }
                 return TRUE;
             }
             else
@@ -1058,19 +1161,31 @@ static int u32_possible(struct frame *df, int row, int col)
     }
 }
 
-static int u64_possible(struct frame *df, int row, int col)
+static int u64_possible(struct frame *df, int row, int col, u8 *factor, u8 *max_factor)
 {
     if (uint_possible(df, row, col))
     {
         u64 value;
-        u8 factor;
-        int success = string_to_u64(df->cols[col][row], &value, &factor);
+        int success = string_to_u64(df->cols[col][row], &value, factor);
         if (!success)
         {
             return FALSE;
         }
         else
         {
+            if (value == 0)
+            {
+                *max_factor = UINT8_MAX;
+            }
+            else
+            {
+                *max_factor = *factor;
+                while (value * 10 < UINT64_MAX / 100)
+                {
+                    value *= 10;
+                    ++*max_factor;
+                }
+            }
             return TRUE;
         }
     }
@@ -1114,6 +1229,10 @@ static int get_u8_poss_num(struct frame *df, int row, int col, u8 *max_factor, u
             {
                 if (new_factor <= *max_factor)
                 {
+                    if (new_factor > *factor)
+                    {
+                        *factor = new_factor;
+                    }
                     ++num_poss;
                 }
                 else
@@ -1170,7 +1289,9 @@ static float comp_u8dec(struct frame *df, int row, int col)
 
 static float comp_u16same(struct frame *df, int row, int col)
 {
-    if (u16_possible(df, row, col))
+    u8 factor;
+    u8 max_factor;
+    if (u16_possible(df, row, col, &factor, &max_factor))
     {
         int num_same = num_strsame(df, row, col);
         if (num_same > UINT16_MAX)
@@ -1187,10 +1308,68 @@ static float comp_u16same(struct frame *df, int row, int col)
     }
 }
 
+static int get_u16_poss_num(struct frame *df, int row, int col, u8 *max_factor, u8 *factor)
+{
+    if (u16_possible(df, row, col, factor, max_factor))
+    {
+        int num_poss = 0;
+        while (row + num_poss < df->num_rows)
+        {
+            u8 new_factor;
+            u8 new_max_factor;
+            if (u16_possible(df, row + num_poss, col, &new_factor, &new_max_factor))
+            {
+                if (new_factor <= *max_factor)
+                {
+                    if (new_factor > *factor)
+                    {
+                        *factor = new_factor;
+                    }
+                    ++num_poss;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+        return num_poss;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
 static float comp_u16diff(struct frame *df, int row, int col)
 {
-    return FLT_MAX;
+    u8 factor;
+    u8 max_factor;
+    int num_poss = get_u16_poss_num(df, row, col, &max_factor, &factor);
+    if (num_poss > 0)
+    {
+        if (num_poss > UINT16_MAX)
+        {
+            num_poss = UINT16_MAX;
+        }
+        int high_size = 0;
+        for (int i = 0; i < num_poss; ++i)
+        {
+            high_size += strlen(df->cols[col][row + i]);
+        }
+        int low_size = sizeof(u16) + sizeof(u8) + sizeof(u16) * num_poss;
+        return (((float)low_size) / ((float)high_size));
+    }
+    else
+    {
+        return FLT_MAX;
+    }
 }
+
 static float comp_u16inc(struct frame *df, int row, int col)
 {
     return FLT_MAX;
@@ -1202,7 +1381,9 @@ static float comp_u16dec(struct frame *df, int row, int col)
 
 static float comp_u32same(struct frame *df, int row, int col)
 {
-    if (u32_possible(df, row, col))
+    u8 factor;
+    u8 max_factor;
+    if (u32_possible(df, row, col, &factor, &max_factor))
     {
         int num_same = num_strsame(df, row, col);
         if (num_same > UINT16_MAX)
@@ -1219,10 +1400,68 @@ static float comp_u32same(struct frame *df, int row, int col)
     }
 }
 
+static int get_u32_poss_num(struct frame *df, int row, int col, u8 *max_factor, u8 *factor)
+{
+    if (u32_possible(df, row, col, factor, max_factor))
+    {
+        int num_poss = 0;
+        while (row + num_poss < df->num_rows)
+        {
+            u8 new_factor;
+            u8 new_max_factor;
+            if (u32_possible(df, row + num_poss, col, &new_factor, &new_max_factor))
+            {
+                if (new_factor <= *max_factor)
+                {
+                    if (new_factor > *factor)
+                    {
+                        *factor = new_factor;
+                    }
+                    ++num_poss;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+        return num_poss;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
 static float comp_u32diff(struct frame *df, int row, int col)
 {
-    return FLT_MAX;
+    u8 factor;
+    u8 max_factor;
+    int num_poss = get_u32_poss_num(df, row, col, &max_factor, &factor);
+    if (num_poss > 0)
+    {
+        if (num_poss > UINT16_MAX)
+        {
+            num_poss = UINT16_MAX;
+        }
+        int high_size = 0;
+        for (int i = 0; i < num_poss; ++i)
+        {
+            high_size += strlen(df->cols[col][row + i]);
+        }
+        int low_size = sizeof(u16) + sizeof(u8) + sizeof(u32) * num_poss;
+        return (((float)low_size) / ((float)high_size));
+    }
+    else
+    {
+        return FLT_MAX;
+    }
 }
+
 static float comp_u32inc(struct frame *df, int row, int col)
 {
     return FLT_MAX;
@@ -1234,7 +1473,9 @@ static float comp_u32dec(struct frame *df, int row, int col)
 
 static float comp_u64same(struct frame *df, int row, int col)
 {
-    if (u64_possible(df, row, col))
+    u8 factor;
+    u8 max_factor;
+    if (u64_possible(df, row, col, &factor, &max_factor))
     {
         int num_same = num_strsame(df, row, col);
         if (num_same > UINT16_MAX)
@@ -1251,10 +1492,68 @@ static float comp_u64same(struct frame *df, int row, int col)
     }
 }
 
+static int get_u64_poss_num(struct frame *df, int row, int col, u8 *max_factor, u8 *factor)
+{
+    if (u64_possible(df, row, col, factor, max_factor))
+    {
+        int num_poss = 0;
+        while (row + num_poss < df->num_rows)
+        {
+            u8 new_factor;
+            u8 new_max_factor;
+            if (u64_possible(df, row + num_poss, col, &new_factor, &new_max_factor))
+            {
+                if (new_factor <= *max_factor)
+                {
+                    if (new_factor > *factor)
+                    {
+                        *factor = new_factor;
+                    }
+                    ++num_poss;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+        return num_poss;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
 static float comp_u64diff(struct frame *df, int row, int col)
 {
-    return FLT_MAX;
+    u8 factor;
+    u8 max_factor;
+    int num_poss = get_u64_poss_num(df, row, col, &max_factor, &factor);
+    if (num_poss > 0)
+    {
+        if (num_poss > UINT16_MAX)
+        {
+            num_poss = UINT16_MAX;
+        }
+        int high_size = 0;
+        for (int i = 0; i < num_poss; ++i)
+        {
+            high_size += strlen(df->cols[col][row + i]);
+        }
+        int low_size = sizeof(u16) + sizeof(u8) + sizeof(u64) * num_poss;
+        return (((float)low_size) / ((float)high_size));
+    }
+    else
+    {
+        return FLT_MAX;
+    }
 }
+
 static float comp_u64inc(struct frame *df, int row, int col)
 {
     return FLT_MAX;
@@ -1373,7 +1672,36 @@ static void dump_u16same(struct frame *df, void **bytes, int *index, int *size, 
     *row += num_same;
 }
 
-static void dump_u16diff(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
+static void dump_u16diff(struct frame *df, void **bytes, int *index, int *size, int *row, int col)
+{
+    u8 factor;
+    u8 max_factor;
+    int num_poss = get_u16_poss_num(df, *row, col, &max_factor, &factor);
+    if (num_poss > UINT16_MAX)
+    {
+        num_poss = UINT16_MAX;
+    }
+    u8 indchr = (u8)U16_DIFFS;
+    bytes_dump(bytes, index, size, (void *)&indchr, U8);
+    u16 num = (u16)num_poss;
+    bytes_dump(bytes, index, size, (void *)&num, U16);
+    bytes_dump(bytes, index, size, (void *)&factor, U8);
+    for (int i = 0; i < num_poss; ++i)
+    {
+        u8 new_factor;
+        u64 u_int;
+        (void)string_to_u64(df->cols[col][*row], &u_int, &new_factor);
+        while (new_factor < factor)
+        {
+            u_int *= 10;
+            ++new_factor;
+        }
+        u16 value = (u16)u_int;
+        bytes_dump(bytes, index, size, (void *)&value, U16);
+        ++*row;
+    }
+}
+
 static void dump_u16inc(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u16dec(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 
@@ -1397,7 +1725,36 @@ static void dump_u32same(struct frame *df, void **bytes, int *index, int *size, 
     *row += num_same;
 }
 
-static void dump_u32diff(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
+static void dump_u32diff(struct frame *df, void **bytes, int *index, int *size, int *row, int col)
+{
+    u8 factor;
+    u8 max_factor;
+    int num_poss = get_u32_poss_num(df, *row, col, &max_factor, &factor);
+    if (num_poss > UINT16_MAX)
+    {
+        num_poss = UINT16_MAX;
+    }
+    u8 indchr = (u8)U32_DIFFS;
+    bytes_dump(bytes, index, size, (void *)&indchr, U8);
+    u16 num = (u16)num_poss;
+    bytes_dump(bytes, index, size, (void *)&num, U16);
+    bytes_dump(bytes, index, size, (void *)&factor, U8);
+    for (int i = 0; i < num_poss; ++i)
+    {
+        u8 new_factor;
+        u64 u_int;
+        (void)string_to_u64(df->cols[col][*row], &u_int, &new_factor);
+        while (new_factor < factor)
+        {
+            u_int *= 10;
+            ++new_factor;
+        }
+        u32 value = (u32)u_int;
+        bytes_dump(bytes, index, size, (void *)&value, U32);
+        ++*row;
+    }
+}
+
 static void dump_u32inc(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u32dec(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 
@@ -1421,7 +1778,36 @@ static void dump_u64same(struct frame *df, void **bytes, int *index, int *size, 
     *row += num_same;
 }
 
-static void dump_u64diff(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
+static void dump_u64diff(struct frame *df, void **bytes, int *index, int *size, int *row, int col)
+{
+    u8 factor;
+    u8 max_factor;
+    int num_poss = get_u64_poss_num(df, *row, col, &max_factor, &factor);
+    if (num_poss > UINT16_MAX)
+    {
+        num_poss = UINT16_MAX;
+    }
+    u8 indchr = (u8)U64_DIFFS;
+    bytes_dump(bytes, index, size, (void *)&indchr, U8);
+    u16 num = (u16)num_poss;
+    bytes_dump(bytes, index, size, (void *)&num, U16);
+    bytes_dump(bytes, index, size, (void *)&factor, U8);
+    for (int i = 0; i < num_poss; ++i)
+    {
+        u8 new_factor;
+        u64 u_int;
+        (void)string_to_u64(df->cols[col][*row], &u_int, &new_factor);
+        while (new_factor < factor)
+        {
+            u_int *= 10;
+            ++new_factor;
+        }
+        u64 value = (u64)u_int;
+        bytes_dump(bytes, index, size, (void *)&value, U64);
+        ++*row;
+    }
+}
+
 static void dump_u64inc(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 static void dump_u64dec(struct frame *df, void **bytes, int *index, int *size, int *row, int col) {}
 
