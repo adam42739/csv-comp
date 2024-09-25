@@ -1,3 +1,5 @@
 /debug
 /release
 /env
+/main.py
+/__pycache__
