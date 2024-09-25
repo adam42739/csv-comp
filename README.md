@@ -6,7 +6,7 @@ csv-comp is an algorithm for compressing CSV files designed specifically for sto
 
 ## Performance
 
-For the 9 stock options located in [files](/files/), file compression was performed using [Apache Parquet](https://en.wikipedia.org/wiki/Apache_Parquet), [Apache ORC](https://en.wikipedia.org/wiki/Apache_ORC), and [feather](https://github.com/wesm/feather). The compression ratio is computed by dividing the bytes of the compressed file by the bytes of the CSV file.
+For the 9 stock options located in [files](/files/), compression was performed using [Apache Parquet](https://en.wikipedia.org/wiki/Apache_Parquet), [Apache ORC](https://en.wikipedia.org/wiki/Apache_ORC), and [feather](https://github.com/wesm/feather). The compression ratio is computed by dividing the bytes of the compressed file by the bytes of the CSV file.
 
 |CSV (baseline)|Parquet|ORC|feather|csv-comp|
 |-|-|-|-|-|
